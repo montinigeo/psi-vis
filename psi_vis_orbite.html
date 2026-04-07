@@ -49,6 +49,15 @@ h1{font-family:'Share Tech Mono',monospace;font-size:13px;letter-spacing:.18em;c
   letter-spacing:.1em;text-transform:uppercase;}
 .rval{font-family:'Share Tech Mono',monospace;font-size:22px;font-weight:bold;line-height:1;}
 .rswatch{width:40px;height:24px;border-radius:3px;border:1px solid var(--border);align-self:flex-end;}
+
+.custom-panel{display:none;flex-wrap:wrap;gap:10px;justify-content:center;
+  background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  padding:10px 16px;max-width:680px;width:100%;margin-bottom:12px;}
+.custom-panel.visible{display:flex;}
+.custom-panel .sect{font-family:'Share Tech Mono',monospace;font-size:9px;
+  letter-spacing:.14em;color:var(--accent);text-transform:uppercase;
+  width:100%;margin-bottom:2px;}
+
 </style>
 </head>
 <body>
@@ -69,6 +78,7 @@ h1{font-family:'Share Tech Mono',monospace;font-size:13px;letter-spacing:.18em;c
 </div>
 <div id="params" style="font-family:'Share Tech Mono',monospace;font-size:11px;
   color:#4a9eff;letter-spacing:.1em;margin-bottom:10px;text-align:center;min-height:16px;">—</div>
+<div class="custom-panel" id="custom-panel"><div class="sect">▸ Parametri personalizzati</div><div class="cg"><label>Azimut ASC (°)</label><input type="number" id="c-az-a" value="-11" step="0.5" min="-180" max="360" style="background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:12px;padding:5px 8px;border-radius:4px;width:100%" oninput="onCustomChange()"></div><div class="cg"><label>Off-nadir ASC (°)</label><input type="number" id="c-on-a" value="42" step="0.5" min="1" max="89" style="background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:12px;padding:5px 8px;border-radius:4px;width:100%" oninput="onCustomChange()"></div><div class="cg"><label>Azimut DESC (°)</label><input type="number" id="c-az-d" value="191" step="0.5" min="-180" max="360" style="background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:12px;padding:5px 8px;border-radius:4px;width:100%" oninput="onCustomChange()"></div><div class="cg"><label>Off-nadir DESC (°)</label><input type="number" id="c-on-d" value="38" step="0.5" min="1" max="89" style="background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:12px;padding:5px 8px;border-radius:4px;width:100%" oninput="onCustomChange()"></div></div>
 <div class="polar-wrap">
   <canvas id="cv" width="560" height="560"></canvas>
   <canvas id="mk" width="560" height="560" style="pointer-events:none;position:absolute;top:0;left:0;width:100%;height:100%"></canvas>
@@ -95,6 +105,7 @@ const SATS = {
   'rs2':     { label:'RADARSAT-2',            asc:{az:-10.0,on:35.0}, desc:{az:190.0,on:35.0} },
   'csk':     { label:'COSMO-SkyMed',          asc:{az:-15.0,on:30.0}, desc:{az:195.0,on:30.0} },
   'tsx':     { label:'TerraSAR-X / TanDEM-X', asc:{az:-10.0,on:35.0}, desc:{az:190.0,on:35.0} },
+  'custom':  { label:'Personalizzato',         asc:{az:-11.0,on:42.0}, desc:{az:191.0,on:38.0} },
 };
 
 // ── Formula pc_mov ────────────────────────────────────────────────────────────
@@ -273,6 +284,23 @@ function hoverCoords(e,ov,R){
 }
 
 // ── Opzioni select satellite ──────────────────────────────────────────────────
+
+function getSat(){
+  const key=document.getElementById('sat').value;
+  if(key!=='custom')return SATS[key];
+  return{label:'Personalizzato',
+    asc:{az:parseFloat(document.getElementById('c-az-a').value)||0,
+         on:parseFloat(document.getElementById('c-on-a').value)||39},
+    desc:{az:parseFloat(document.getElementById('c-az-d').value)||0,
+          on:parseFloat(document.getElementById('c-on-d').value)||39}};
+}
+function onSatChange(){
+  const isC=document.getElementById('sat').value==='custom';
+  document.getElementById('custom-panel').classList.toggle('visible',isC);
+  draw();
+}
+function onCustomChange(){ if(document.getElementById('sat').value==='custom')draw(); }
+
 function buildSatOptions(selId){
   const sel=document.getElementById(selId);
   Object.entries(SATS).forEach(([k,v])=>{
@@ -282,7 +310,7 @@ function buildSatOptions(selId){
 
 const R=560/2-28;
 function updateParams(){
-  const sat=SATS[document.getElementById('sat').value];
+  const sat=getSat();
   document.getElementById('params').textContent=
     'ASC  az '+sat.asc.az.toFixed(1)+'°  on '+sat.asc.on.toFixed(1)+'°'+'  ·  '+
     'DESC  az '+sat.desc.az.toFixed(1)+'°  on '+sat.desc.on.toFixed(1)+'°';
@@ -292,7 +320,7 @@ function clearMarker(){
   if(mk)mk.getContext('2d').clearRect(0,0,mk.width,mk.height);
 }
 function draw(){
-  const sat=SATS[document.getElementById('sat').value];
+  const sat=getSat();
   updateParams();
   const res=parseInt(document.getElementById('res').value)||2;
   const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
@@ -309,7 +337,7 @@ function calc(){
   const asp=parseFloat(document.getElementById('ca').value);
   const slp=parseFloat(document.getElementById('cs').value);
   if(isNaN(asp)||isNaN(slp))return;
-  const sat=SATS[document.getElementById('sat').value];
+  const sat=getSat();
   const a=pcMov(slp,asp,sat.asc.az,sat.asc.on);
   const d=pcMov(slp,asp,sat.desc.az,sat.desc.on);
   document.getElementById('ra').textContent=a.toFixed(1)+'%';
@@ -322,7 +350,7 @@ ov.addEventListener('mousemove',e=>{
   const c=hoverCoords(e,ov,R);
   if(!c){ov.getContext('2d').clearRect(0,0,ov.width,ov.height);
     document.getElementById('tip').textContent='— passa il cursore sul diagramma —';return;}
-  const sat=SATS[document.getElementById('sat').value];
+  const sat=getSat();
   const a=pcMov(c.slp,c.asp,sat.asc.az,sat.asc.on);
   const d=pcMov(c.slp,c.asp,sat.desc.az,sat.desc.on);
   const col=classCSS(a,d);
@@ -339,7 +367,7 @@ ov.addEventListener('mouseleave',()=>{
   ov.getContext('2d').clearRect(0,0,ov.width,ov.height);
   document.getElementById('tip').textContent='— passa il cursore sul diagramma —';
 });
-document.getElementById('sat').addEventListener('change',draw);
+document.getElementById('sat').addEventListener('change',onSatChange);
 document.getElementById('res').addEventListener('change',draw);
 buildSatOptions('sat');
 draw();
